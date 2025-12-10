@@ -420,12 +420,15 @@ fzf_bash_completer() {
         # kill descendant processes of coproc
         descend_process () {
             printf '%s\n' "$1"
-            for pid in $(ps -ef | "$_fzf_bash_completion_awk" -v ppid="$1" '$3 == ppid { print $2 }'); do
-                descend_process "$pid"
-            done
+            local pid
+            if [ -r "/proc/$1/task/$1/children" ]; then
+                while IFS= read -r pid; do
+                    pid="${pid//[[:space:]]/}"
+                    [ -n "$pid" ] && descend_process "$pid"
+                done < <(tr ' ' '\n' </proc/"$1"/task/"$1"/children)
+            fi
         }
-        kill -- $(descend_process "$coproc_pid") 2>/dev/null
-
+        kill -9 -- $(descend_process "$coproc_pid") 2>/dev/null
         printf '%s\n' ": $_fzf_sentinel1$_fzf_sentinel2"
     ) | $_fzf_bash_completion_sed -un "/$_fzf_sentinel1$_fzf_sentinel2/q; p"
     )" 2>/dev/null
