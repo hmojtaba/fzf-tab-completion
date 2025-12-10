@@ -418,15 +418,18 @@ fzf_bash_completer() {
         printf 'code=%q\n' "$code"
 
         # kill descendant processes of coproc
-        descend_process () {
+        descend_process() {
             printf '%s\n' "$1"
-            local pid
-            if [ -r "/proc/$1/task/$1/children" ]; then
-                while IFS= read -r pid; do
-                    pid="${pid//[[:space:]]/}"
-                    [ -n "$pid" ] && descend_process "$pid"
-                done < <(tr ' ' '\n' </proc/"$1"/task/"$1"/children)
-            fi
+            local pid file="/proc/$1/task/$1/children"
+            # If parent process died before we start: nothing to do
+            [ -r "$file" ] || return 0
+            # Safe: silence ALL errors inside and from process substitution
+            while IFS= read -r pid; do
+                pid="${pid//[[:space:]]/}"
+                [ -n "$pid" ] && descend_process "$pid"
+            done 2>/dev/null < <(
+                tr ' ' '\n' <"$file" 2>/dev/null
+            )
         }
         kill -9 -- $(descend_process "$coproc_pid") 2>/dev/null
         printf '%s\n' ": $_fzf_sentinel1$_fzf_sentinel2"
